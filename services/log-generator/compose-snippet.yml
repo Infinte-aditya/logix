@@ -1,0 +1,14 @@
+services:
+  log-generator:
+    build: ./services/log-generator
+    environment:
+      LOG_PATH: /data/app.log
+      LINES_PER_SEC: "10"
+      SPIKE_MIN_INTERVAL: "60"
+      SPIKE_MAX_INTERVAL: "120"
+      SPIKE_DURATION: "20"
+    volumes:
+      - logdata:/data
+
+volumes:
+  logdata:
