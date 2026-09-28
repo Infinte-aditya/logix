@@ -1,0 +1,12 @@
+services:
+  gateway:
+    build: ./services/gateway
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      ALERT_CHANNEL: alerts
+      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    restart: unless-stopped
