@@ -18,7 +18,8 @@ import redis
 from botocore.exceptions import BotoCoreError, ClientError
 
 logger = logging.getLogger("notifier")
-logging.basicConfig(level=logging.INFO, stream=sys.stdout, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.basicConfig(level=logging.INFO, stream=sys.stdout,
+    format='{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","msg":"%(message)s"}')
 
 SEVERITY_LEVEL = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
 MAX_ATTEMPTS = 5

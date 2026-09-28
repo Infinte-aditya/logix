@@ -16,6 +16,8 @@ services:
       LOG_PATH: /data/app.log
     volumes:
       - logdata:/data
+    stop_signal: SIGTERM
+    stop_grace_period: 5s
 
   detector:
     build: ./services/detector
@@ -31,6 +33,14 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    stop_signal: SIGTERM
+    stop_grace_period: 10s
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import redis; r=redis.Redis.from_url('redis://redis:6379/0',decode_responses=True); r.ping(); print('ok')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   gateway:
     build:
@@ -77,6 +87,14 @@ services:
         condition: service_started
         required: false
     restart: unless-stopped
+    stop_signal: SIGTERM
+    stop_grace_period: 10s
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import redis; r=redis.Redis.from_url('redis://redis:6379/0',decode_responses=True); r.ping(); print('ok')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   moto:
     image: motoserver/moto:5.2.3
@@ -97,6 +115,12 @@ services:
     depends_on:
       gateway:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 volumes:
   logdata:

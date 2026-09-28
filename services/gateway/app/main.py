@@ -36,7 +36,7 @@ logger = logging.getLogger("gateway")
 logging.basicConfig(
     level=logging.INFO,
     stream=sys.stdout,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    format='{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","msg":"%(message)s"}',
 )
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
