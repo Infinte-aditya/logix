@@ -160,3 +160,17 @@ async def test_stats_returns_counts(fake_redis):
         resp = await client.get("/stats")
     assert resp.status_code == 200
     assert resp.json() == {"severity_counts": {"LOW": 0, "MEDIUM": 0, "HIGH": 0, "CRITICAL": 0}}
+
+
+@pytest.mark.anyio
+async def test_notifications_test_endpoint(fake_redis):
+    app, task = make_gateway(fake_redis)
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://gw") as client:
+            resp = await client.post("/notifications/test")
+        assert resp.status_code == 200
+        j = resp.json()
+        assert j["status"] == "published"
+        assert j["id"].startswith("test-")
+    finally:
+        await stop_gateway(task)

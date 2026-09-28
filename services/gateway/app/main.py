@@ -241,14 +241,26 @@ def create_app(
         await state.redis.publish("settings:updated", json.dumps(DEFAULT_SETTINGS))
         return dict(DEFAULT_SETTINGS)
 
-    @app.get("/logs")
-    async def get_logs(lines: int = 50) -> dict[str, object]:
-        path = os.getenv("LOG_PATH", "/data/app.log")
-        try:
-            raw = await asyncio.to_thread(_read_tail, path, lines)
-            return {"lines": raw}
-        except Exception as e:
-            return {"lines": [], "error": str(e)}
+    @app.get("/notifications")
+    async def get_notifications(limit: int = 50) -> list[str]:
+        raw = await state.redis.lrange("notifier:deliveries", 0, limit - 1)
+        return raw if raw else []
+
+    @app.post("/notifications/test")
+    async def send_test_notification() -> dict[str, object]:
+        test_alert = {
+            "id": "test-" + str(os.urandom(4).hex()),
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "severity": "MEDIUM",
+            "error_rate": 0.25,
+            "baseline_mean": 0.02,
+            "baseline_std": 0.01,
+            "z_score": 23.0,
+            "window_seconds": 60,
+            "message": "[TEST] Synthetic alert from the gateway — no action needed",
+        }
+        await state.redis.publish(state.channel, json.dumps(test_alert))
+        return {"status": "published", "id": test_alert["id"]}
 
     @app.get("/logs")
     async def get_logs(lines: int = 50) -> dict[str, object]:

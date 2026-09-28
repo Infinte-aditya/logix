@@ -40,12 +40,13 @@ class FakePubSub:
 
 
 class FakeRedis:
-    """Minimal redis.asyncio double: ping + pubsub + key-value, no network."""
+    """Minimal redis.asyncio double: ping + pubsub + key-value + lists, no network."""
 
     def __init__(self) -> None:
         self.pubsub_obj = FakePubSub()
         self.ping_ok = True
         self._store: dict[str, str] = {}
+        self._lists: dict[str, list[str]] = {}
         self._published_channels: list[tuple[str, str]] = []
 
     def pubsub(self) -> FakePubSub:
@@ -70,6 +71,10 @@ class FakeRedis:
     async def publish(self, channel: str, message: str) -> int:
         self._published_channels.append((channel, message))
         return len(self._published_channels)
+
+    async def lrange(self, key: str, start: int, end: int) -> list[str]:
+        lst = self._lists.get(key, [])
+        return lst[start:end+1] if end >= 0 else lst[start:]
 
     async def aclose(self) -> None:
         return None
