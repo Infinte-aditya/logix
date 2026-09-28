@@ -1,0 +1,16 @@
+services:
+  detector:
+    build: ./services/detector
+    environment:
+      LOG_PATH: /data/app.log
+      REDIS_URL: redis://redis:6379/0
+      ALERT_CHANNEL: alerts
+      WINDOW_SECONDS: "60"
+      ALPHA: "0.05"
+    volumes:
+      - logdata:/data
+    depends_on:
+      - redis
+
+volumes:
+  logdata:
