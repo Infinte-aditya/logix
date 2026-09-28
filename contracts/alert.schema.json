@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "alert.schema.json",
+  "title": "Alert",
+  "description": "Message published on the Redis channel 'alerts' by the detector.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique alert identifier (UUID v4)."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO8601 UTC timestamp of the detection."
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+      "description": "Severity bucket assigned by the detector."
+    },
+    "error_rate": {
+      "type": "number",
+      "description": "Fraction of ERROR-level lines in the current window."
+    },
+    "baseline_mean": {
+      "type": "number",
+      "description": "Mean error rate over the baseline period."
+    },
+    "baseline_std": {
+      "type": "number",
+      "description": "Standard deviation of the baseline error rate."
+    },
+    "z_score": {
+      "type": "number",
+      "description": "How many std deviations error_rate is from baseline_mean."
+    },
+    "window_seconds": {
+      "type": "integer",
+      "description": "Length of the detection window in seconds."
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable summary of the alert."
+    }
+  },
+  "required": [
+    "id",
+    "timestamp",
+    "severity",
+    "error_rate",
+    "baseline_mean",
+    "baseline_std",
+    "z_score",
+    "window_seconds",
+    "message"
+  ],
+  "additionalProperties": false
+}

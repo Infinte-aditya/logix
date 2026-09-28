@@ -1,0 +1,11 @@
+{
+  "id": "3f6b0d1e-6a3e-4f9a-9c6e-1a2b3c4d5e6f",
+  "timestamp": "2026-09-28T12:00:00Z",
+  "severity": "MEDIUM",
+  "error_rate": 0.42,
+  "baseline_mean": 0.05,
+  "baseline_std": 0.03,
+  "z_score": 12.33,
+  "window_seconds": 60,
+  "message": "Error rate spike in service 'checkout': 42% in the last 60s window."
+}
