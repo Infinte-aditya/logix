@@ -34,3 +34,8 @@ class Baseline:
         delta = rate - self.mean
         self.mean += self.alpha * delta
         self._var += self.alpha * (delta * delta - self._var)
+
+    def prime(self, mean, std=0.0):
+        """Seed the baseline at a known normal rate (skips EWMA warm-up drift)."""
+        self.mean = mean
+        self._var = std * std

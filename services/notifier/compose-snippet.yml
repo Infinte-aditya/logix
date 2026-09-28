@@ -8,8 +8,9 @@ services:
       AWS_REGION: us-east-1
       # placeholder - replace with the real TopicArn (see infra/README.md)
       SNS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:logix-alerts
-      # LocalStack by default; unset for real AWS (credentials via env/role only)
-      AWS_ENDPOINT_URL: http://localstack:4566
+      # local AWS mock (moto server, compose profile local-aws); unset for real AWS
+      # (credentials via env/role only; mock creds test/test are set in docker-compose.yml)
+      AWS_ENDPOINT_URL: http://moto:5000
       # optional second sink; empty = disabled
       CW_LOG_GROUP: ""
     depends_on:

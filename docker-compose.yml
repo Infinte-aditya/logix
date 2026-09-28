@@ -33,7 +33,9 @@ services:
         condition: service_healthy
 
   gateway:
-    build: ./services/gateway
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0

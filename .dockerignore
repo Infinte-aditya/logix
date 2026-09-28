@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+.venv/
+node_modules/
+.git/
+.github/
+scripts/
+services/notifier/.venv/
+services/detector/.venv/
+services/frontend/node_modules/
+services/frontend/dist/
+services/log-generator/.venv/

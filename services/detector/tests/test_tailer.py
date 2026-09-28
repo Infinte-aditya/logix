@@ -2,7 +2,6 @@ import os
 from datetime import datetime, timezone
 
 import pytest
-
 from app.tailer import Tailer, parse_line
 
 

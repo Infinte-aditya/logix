@@ -4,11 +4,12 @@ RUN useradd --create-home appuser
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY services/gateway/requirements.txt .
+COPY contracts /app/contracts
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app /app/app
+COPY services/gateway/app /app/app
 
 USER appuser
 

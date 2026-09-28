@@ -1,7 +1,15 @@
 import asyncio
+import os
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def pytest_configure(config):
+    os.environ.setdefault("CONTRACTS_DIR", str(REPO_ROOT / "contracts"))
 
 
 class FakePubSub:
@@ -32,11 +40,13 @@ class FakePubSub:
 
 
 class FakeRedis:
-    """Minimal redis.asyncio double: ping + pubsub, no network."""
+    """Minimal redis.asyncio double: ping + pubsub + key-value, no network."""
 
     def __init__(self) -> None:
         self.pubsub_obj = FakePubSub()
         self.ping_ok = True
+        self._store: dict[str, str] = {}
+        self._published_channels: list[tuple[str, str]] = []
 
     def pubsub(self) -> FakePubSub:
         return self.pubsub_obj
@@ -45,6 +55,21 @@ class FakeRedis:
         if not self.ping_ok:
             raise RuntimeError("redis unreachable")
         return True
+
+    async def get(self, key: str) -> str | None:
+        return self._store.get(key)
+
+    async def set(self, key: str, value: str) -> bool:
+        self._store[key] = value
+        return True
+
+    async def delete(self, key: str) -> bool:
+        self._store.pop(key, None)
+        return True
+
+    async def publish(self, channel: str, message: str) -> int:
+        self._published_channels.append((channel, message))
+        return len(self._published_channels)
 
     async def aclose(self) -> None:
         return None

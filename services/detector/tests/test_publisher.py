@@ -2,7 +2,6 @@ import json
 
 import pytest
 import redis
-
 from app.publisher import MAX_DELAY, RedisPublisher
 
 

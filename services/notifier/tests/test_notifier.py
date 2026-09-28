@@ -6,7 +6,6 @@ import json
 
 import boto3
 import pytest
-
 from app.main import SEVERITY_LEVEL, Notifier, parse_min_severity, read_config
 from conftest import ALERT, FlakySNS, received_messages
 
