@@ -1,0 +1,6 @@
+# notifier (Person B) - exact pins, Python 3.11
+redis==8.1.0
+boto3==1.43.103
+moto==5.2.3
+pytest==9.1.1
+ruff==0.16.9
