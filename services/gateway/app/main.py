@@ -1,8 +1,8 @@
-"""gateway: relays Redis alert messages to browsers over WebSocket (AGENTS.md).
+"""gateway: relays Redis alert messages to browsers over WebSocket.
 
-Forwards each valid JSON message on ALERT_CHANNEL unchanged to every /ws
-client, replays the last 50 alerts to new clients. Env: REDIS_URL,
-ALERT_CHANNEL, CORS_ORIGINS.
+Forwards each valid JSON message on ALERT_CHANNEL to /ws clients, replays
+the last 50 alerts to new clients. Exposes GET/PUT /settings, GET /stats,
+improved /health. Env: REDIS_URL, ALERT_CHANNEL, CORS_ORIGINS.
 """
 
 import asyncio
@@ -14,18 +14,29 @@ from collections import deque
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
+import jsonschema
 import redis.asyncio as aioredis
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+_CONTRACTS_DIR = os.getenv("CONTRACTS_DIR", "/app/contracts")
+with open(os.path.join(_CONTRACTS_DIR, "settings.schema.json")) as f:
+    SETTINGS_SCHEMA = json.load(f)
+DEFAULT_SETTINGS = {k: v.get("default") for k, v in SETTINGS_SCHEMA["properties"].items()}
+DEFAULT_SETTINGS["severity_thresholds"] = {
+    k: v["default"] for k, v in SETTINGS_SCHEMA["properties"]["severity_thresholds"]["properties"].items()
+}
 
 logger = logging.getLogger("gateway")
 
 logging.basicConfig(
     level=logging.INFO,
     stream=sys.stdout,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    format='{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","msg":"%(message)s"}',
 )
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -43,11 +54,18 @@ BACKOFF_INIT = 1.0
 BACKOFF_MAX = 10.0
 
 
-class ConnectionManager:
-    """Tracks connected WebSockets and serializes sends per connection."""
+def _read_tail(path: str, n: int) -> list[str]:
+    with open(path) as f:
+        return list(deque(f, n))
 
+
+class ConnectionManager:
     def __init__(self) -> None:
         self._connections: dict[WebSocket, asyncio.Lock] = {}
+
+    @property
+    def client_count(self) -> int:
+        return len(self._connections)
 
     def connect(self, websocket: WebSocket) -> None:
         self._connections[websocket] = asyncio.Lock()
@@ -56,7 +74,6 @@ class ConnectionManager:
         self._connections.pop(websocket, None)
 
     async def send_history(self, websocket: WebSocket, history: Iterable[str]) -> None:
-        """Replay the backlog to one client while holding its send lock."""
         lock = self._connections.get(websocket)
         if lock is None:
             return
@@ -66,7 +83,6 @@ class ConnectionManager:
                     return
 
     async def broadcast(self, data: str) -> None:
-        """Send an alert to every connected client, dropping dead ones."""
         for websocket, lock in list(self._connections.items()):
             async with lock:
                 if websocket in self._connections:
@@ -75,7 +91,7 @@ class ConnectionManager:
     async def _send(self, websocket: WebSocket, data: str) -> bool:
         try:
             await asyncio.wait_for(websocket.send_text(data), timeout=SEND_TIMEOUT)
-        except Exception:  # noqa: BLE001 - any send failure means a dead client
+        except Exception:
             logger.debug("dropping dead websocket connection")
             self.disconnect(websocket)
             return False
@@ -92,14 +108,13 @@ class GatewayState:
 
 def is_valid_alert_payload(data: object) -> bool:
     try:
-        json.loads(data)  # type: ignore[arg-type]
+        json.loads(data)
     except (TypeError, ValueError):
         return False
     return True
 
 
 async def run_subscriber(state: GatewayState) -> None:
-    """Subscribe to ALERT_CHANNEL forever; reconnect with exponential backoff."""
     backoff = BACKOFF_INIT
     while True:
         pubsub = None
@@ -121,10 +136,8 @@ async def run_subscriber(state: GatewayState) -> None:
                 await state.manager.broadcast(data)
         except asyncio.CancelledError:
             raise
-        except Exception as exc:  # noqa: BLE001 - never crash: redis down/dropped
-            logger.warning(
-                "redis subscription lost (%s); retrying in %.1fs", exc, backoff
-            )
+        except Exception as exc:
+            logger.warning("redis subscription lost (%s); retrying in %.1fs", exc, backoff)
         finally:
             if pubsub is not None:
                 with suppress(Exception):
@@ -133,13 +146,38 @@ async def run_subscriber(state: GatewayState) -> None:
         backoff = min(backoff * 2, BACKOFF_MAX)
 
 
+async def get_settings(redis) -> dict:
+    raw = await redis.get("settings:current")
+    if raw:
+        try:
+            stored = json.loads(raw)
+            merged = dict(DEFAULT_SETTINGS)
+            merged.update(stored)
+            return merged
+        except (TypeError, ValueError):
+            pass
+    return dict(DEFAULT_SETTINGS)
+
+
+async def validate_settings(data: dict) -> dict | None:
+    try:
+        jsonschema.validate(data, SETTINGS_SCHEMA)
+    except jsonschema.ValidationError as e:
+        return {"detail": f"Validation error: {e.message}"}
+    if data.get("severity_thresholds"):
+        t = data["severity_thresholds"]
+        vals = [t["low"], t["medium"], t["high"], t["critical"]]
+        if vals != sorted(vals):
+            return {"detail": "severity_thresholds must be strictly increasing"}
+    return None
+
+
 def create_app(
     redis_client: Any = None,
     redis_url: str = REDIS_URL,
     channel: str = ALERT_CHANNEL,
     allowed_origins: Iterable[str] | None = None,
 ) -> FastAPI:
-    """Build the app; inject redis_client in tests, else connect via redis_url."""
     state = GatewayState(
         redis=(
             redis_client
@@ -148,9 +186,9 @@ def create_app(
         ),
         channel=channel,
     )
-    origins = (
-        list(allowed_origins) if allowed_origins is not None else list(CORS_ORIGINS)
-    )
+    origins = (list(allowed_origins) if allowed_origins is not None else list(CORS_ORIGINS))
+    stats: dict[str, int] = {"LOW": 0, "MEDIUM": 0, "HIGH": 0, "CRITICAL": 0}
+    _stats_lock = asyncio.Lock()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -164,21 +202,74 @@ def create_app(
 
     app = FastAPI(title="gateway", lifespan=lifespan)
     app.state.gateway = state
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"])
 
     @app.get("/health")
     async def health() -> dict[str, object]:
         try:
             await asyncio.wait_for(state.redis.ping(), timeout=PING_TIMEOUT)
             redis_ok = True
-        except Exception:  # noqa: BLE001 - health must report, never raise
+        except Exception:
             redis_ok = False
-        return {"status": "ok", "redis": redis_ok}
+        return {
+            "status": "ok",
+            "redis": redis_ok,
+            "clients": state.manager.client_count,
+        }
+
+    @app.get("/stats")
+    async def get_stats() -> dict[str, object]:
+        async with _stats_lock:
+            return {"severity_counts": dict(stats)}
+
+    @app.get("/settings")
+    async def read_settings() -> dict:
+        return await get_settings(state.redis)
+
+    @app.put("/settings")
+    async def update_settings(body: dict) -> JSONResponse:
+        error = await validate_settings(body)
+        if error:
+            return JSONResponse(status_code=422, content=error)
+        await state.redis.set("settings:current", json.dumps(body))
+        await state.redis.publish("settings:updated", json.dumps(body))
+        return await get_settings(state.redis)
+
+    @app.post("/settings/reset")
+    async def reset_settings() -> dict:
+        await state.redis.delete("settings:current")
+        await state.redis.publish("settings:updated", json.dumps(DEFAULT_SETTINGS))
+        return dict(DEFAULT_SETTINGS)
+
+    @app.get("/notifications")
+    async def get_notifications(limit: int = 50) -> list[str]:
+        raw = await state.redis.lrange("notifier:deliveries", 0, limit - 1)
+        return raw if raw else []
+
+    @app.post("/notifications/test")
+    async def send_test_notification() -> dict[str, object]:
+        test_alert = {
+            "id": "test-" + str(os.urandom(4).hex()),
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "severity": "MEDIUM",
+            "error_rate": 0.25,
+            "baseline_mean": 0.02,
+            "baseline_std": 0.01,
+            "z_score": 23.0,
+            "window_seconds": 60,
+            "message": "[TEST] Synthetic alert from the gateway — no action needed",
+        }
+        await state.redis.publish(state.channel, json.dumps(test_alert))
+        return {"status": "published", "id": test_alert["id"]}
+
+    @app.get("/logs")
+    async def get_logs(lines: int = 50) -> dict[str, object]:
+        path = os.getenv("LOG_PATH", "/data/app.log")
+        try:
+            raw = await asyncio.to_thread(_read_tail, path, lines)
+            return {"lines": raw}
+        except Exception as e:
+            return {"lines": [], "error": str(e)}
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:
@@ -187,13 +278,12 @@ def create_app(
         try:
             await state.manager.send_history(websocket, state.history)
             while True:
-                await websocket.receive_text()  # drain client msgs; detect close
+                await websocket.receive_text()
         except WebSocketDisconnect:
             pass
         finally:
             state.manager.disconnect(websocket)
 
     return app
-
 
 app = create_app()

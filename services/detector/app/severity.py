@@ -4,26 +4,23 @@ from datetime import datetime, timezone
 
 MIN_STD = 0.01
 RANK = {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
+DEFAULT_THRESHOLDS = {"low": 3.0, "medium": 4.0, "high": 6.0, "critical": 9.0}
 
 
-def bucket(z):
-    if z >= 9:
-        return "CRITICAL"
-    if z >= 6:
-        return "HIGH"
-    if z >= 4:
-        return "MEDIUM"
-    if z >= 3:
-        return "LOW"
+def bucket(z, thresholds=None):
+    t = thresholds or DEFAULT_THRESHOLDS
+    if z >= t["critical"]: return "CRITICAL"
+    if z >= t["high"]: return "HIGH"
+    if z >= t["medium"]: return "MEDIUM"
+    if z >= t["low"]: return "LOW"
     return None
 
 
-def classify(rate, baseline):
-    """Return (z, severity); (None, None) unless rate exceeds the mean by >= 3 std."""
+def classify(rate, baseline, thresholds=None):
     if not baseline.ready or rate <= baseline.mean:
         return None, None
     z = (rate - baseline.mean) / max(baseline.std, MIN_STD)
-    return z, bucket(z)
+    return z, bucket(z, thresholds)
 
 
 def format_message(rate, mean, z, severity, window_seconds):
@@ -35,7 +32,6 @@ def format_message(rate, mean, z, severity, window_seconds):
 
 
 def build_alert(alert_id, epoch, z, severity, rate, baseline, window_seconds):
-    """Alert dict matching contracts/alert.schema.json."""
     stamp = datetime.fromtimestamp(epoch, timezone.utc).isoformat()
     return {
         "id": str(alert_id),

@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from app.main import WARMUP_SECONDS, Detector
+from app.main import Detector, _DEFAULTS
+from app.severity import DEFAULT_THRESHOLDS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -22,21 +23,31 @@ def uuid_ids():
 
 
 @pytest.fixture
-def make_detector(uuid_ids):
-    def _make(start_ts=0.0, window_seconds=60.0, alpha=0.05):
+def base_settings():
+    return {
+        "window_seconds": 60,
+        "warmup_seconds": 120,
+        "min_events": 20,
+        "ewma_alpha": 0.05,
+        "severity_thresholds": dict(DEFAULT_THRESHOLDS),
+        "cooldown_seconds": 30,
+    }
+
+
+@pytest.fixture
+def make_detector(uuid_ids, base_settings):
+    def _make(start_ts=0.0, **overrides):
+        s = dict(base_settings)
+        s.update(overrides)
         return Detector(
-            window_seconds,
-            alpha,
+            s,
             start_ts=start_ts,
             id_factory=lambda: f"alert-{next(uuid_ids)}",
         )
-
     return _make
 
 
 class Feed:
-    """Deterministic harness: N events per second at an exact error fraction."""
-
     def __init__(self, detector, lines_per_sec=10):
         self.detector = detector
         self.lps = lines_per_sec
@@ -62,7 +73,8 @@ class Feed:
         return self.alerts[-1] if self.alerts else None
 
     def warm_up(self, error_rate=0.02):
-        self.step(error_rate, seconds=int(WARMUP_SECONDS))
+        warmup = self.detector.settings.get("warmup_seconds", 120)
+        self.step(error_rate, seconds=int(warmup))
 
 
 @pytest.fixture

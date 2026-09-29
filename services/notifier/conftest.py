@@ -1,9 +1,8 @@
 import boto3
 import pytest
+from app.main import SEVERITY_LEVEL, Notifier
 from botocore.exceptions import ClientError
 from moto import mock_aws
-
-from app.main import SEVERITY_LEVEL, Notifier
 
 ALERT = {
     "id": "3f6b0d1e-6a3e-4f9a-9c6e-1a2b3c4d5e6f",

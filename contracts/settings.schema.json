@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "settings.schema.json",
+  "title": "Settings",
+  "description": "User-customizable detection and notification settings stored in Redis.",
+  "type": "object",
+  "properties": {
+    "window_seconds": { "type": "integer", "minimum": 10, "maximum": 300, "default": 60 },
+    "warmup_seconds": { "type": "integer", "minimum": 0, "maximum": 600, "default": 120 },
+    "min_events": { "type": "integer", "minimum": 5, "maximum": 500, "default": 20 },
+    "ewma_alpha": { "type": "number", "minimum": 0.01, "maximum": 0.5, "default": 0.05 },
+    "severity_thresholds": {
+      "type": "object",
+      "properties": {
+        "low": { "type": "number", "default": 3 },
+        "medium": { "type": "number", "default": 4 },
+        "high": { "type": "number", "default": 6 },
+        "critical": { "type": "number", "default": 9 }
+      },
+      "required": ["low", "medium", "high", "critical"],
+      "additionalProperties": false
+    },
+    "cooldown_seconds": { "type": "integer", "minimum": 0, "maximum": 300, "default": 30 },
+    "notify_min_severity": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"], "default": "MEDIUM" },
+    "notifications_enabled": { "type": "boolean", "default": true }
+  },
+  "required": [
+    "window_seconds", "warmup_seconds", "min_events", "ewma_alpha",
+    "severity_thresholds", "cooldown_seconds", "notify_min_severity",
+    "notifications_enabled"
+  ],
+  "additionalProperties": false
+}

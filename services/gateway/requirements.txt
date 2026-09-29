@@ -2,6 +2,7 @@
 fastapi==0.141.1
 uvicorn[standard]==0.54.0
 redis==8.1.0
+jsonschema==4.26.0
 pytest==9.1.1
 httpx==0.28.1
 ruff==0.16.9
