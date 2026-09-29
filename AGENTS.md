@@ -34,3 +34,25 @@ log-generator -> (shared file) -> detector -> Redis channel "alerts" -> gateway 
 - Runs with the stated command, tests pass, no lint errors
 - You print a short summary: files changed, commands run, anything unverified
 - If anything is ambiguous or blocked: stop and ask. Do not guess.
+
+## Daily session rules (added for free-model, budget-limited work)
+- Every session reads docs/progress/STATE.md FIRST, before touching any code.
+- Every session attempts EXACTLY ONE task: the "Next task" in STATE.md, unless it is
+  already done, in which case take the top item from BACKLOG.md.
+- Self-tracked budget: count every tool call you make (bash, str_replace, create_file,
+  view, etc.) starting from 1. Announce the running count after each tool call in your
+  reasoning, e.g. "[budget: 7/25]". STOP new work at 25 tool calls in a session, or
+  sooner if you judge you are close to a rate limit or context limit.
+- When stopping (task done OR budget reached OR blocked): leave the repo in a working,
+  committed state. Never leave half-written code uncommitted. If the task isn't
+  finished, commit what compiles/passes tests and clearly mark the rest as TODO in
+  STATE.md, not in half-finished code.
+- Always write a daily log at docs/progress/daily/<YYYY-MM-DD>.md (append a numbered
+  suffix like -2 if a second session happens same day) before ending the session.
+- Always update docs/progress/STATE.md's "Next task" to the exact next step, even if
+  that step is "resume where this session stopped, at file X line Y."
+- Never start a second task in the same session, even if budget remains. One task,
+  verified and committed, is the unit of progress.
+- Never attempt a task estimated to need more than ~25 tool calls. If BACKLOG.md's
+  next item looks larger, break it into 2-3 smaller items in BACKLOG.md first, then
+  do only the first piece.
